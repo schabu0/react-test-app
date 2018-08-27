@@ -13,87 +13,108 @@ function App() {
   );
 }
 
-class Cookie extends React.Component {
-  render() {
-    return <button onClick={() => updateClickCounter()}>Cookie</button>;
-  }
-}
-
-class Viewer extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      clickCounter: 0,
-      clickDate: [0, 0, 0, 0, new Date()],
-      clickPerSecond: 0
-    };
-    updateClickCounter = updateClickCounter.bind(this);
-    getClickCounter = getClickCounter.bind(this);
-  }
-
-  level = clicked => {
-    return clicked < 10 ? 1 : Math.floor(Math.log2(clicked / 10) + 2); // https://www.desmos.com/calculator/oydvyibtfv
+class Cookie extends Component {
+  handleClick = () => {
+    updateClickCounter();
   };
 
   render() {
     return (
-      <div>
-        <p>Clicks counter: {this.state.clickCounter}</p>
-        <p>Level: {this.level(this.state.clickCounter)}</p>
-        <p>Click per second: {this.state.clickPerSecond}</p>
+      <button className="cookie" onClick={this.handleClick}>
+        Click here<br />as fast as you can!
+      </button>
+    );
+  }
+}
+
+class Viewer extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      clickCounter: 0,
+      clickDate: [0, 0, 0, new Date()],
+      clickPerSecond: 0,
+      maxCPS: 0 //best click per second
+    };
+    updateClickCounter = updateClickCounter.bind(this);
+    getClickCounter = getClickCounter.bind(this);
+    getLevel = getLevel.bind(this);
+  }
+
+  //return the level calculated from the function: https://www.desmos.com/calculator/oydvyibtfv
+  level = clicked => {
+    return clicked < 10 ? 1 : Math.floor(Math.log2(clicked / 10) + 2);
+  };
+
+  render() {
+    const level = this.level(this.state.clickCounter);
+    //top - number of minimum points of next level
+    const top = Math.pow(2, level - 1) * 10;
+
+    if (this.state.clickPerSecond > this.state.maxCPS)
+      this.setState(prevState => {
+        return {
+          maxCPS: prevState.clickPerSecond
+        };
+      });
+
+    return (
+      <div className="viewer">
+        <ViewerSlider
+          showLegend={true}
+          name={"clicks"}
+          fullName={"Clicks"}
+          width={this.state.clickCounter / top}
+          top={top}
+          legendName={"next: "}
+        >
+          {this.state.clickCounter}
+        </ViewerSlider>
+        <ViewerSlider
+          showLegend={false}
+          fullName={"Level"}
+          name={"level"}
+          width={(7 * (level + 1.7)) / (level + 2.1) - 6}
+          top={level}
+        >
+          {level}
+        </ViewerSlider>
+        <ViewerSlider
+          showLegend={true}
+          name={"cps"}
+          fullName={"Clicks per second"}
+          width={this.state.clickPerSecond / this.state.maxCPS}
+          top={this.state.maxCPS.toFixed(2)}
+          legendName={"max: "}
+        >
+          {this.state.clickPerSecond.toFixed(2)}
+        </ViewerSlider>
       </div>
     );
   }
 }
 
-//auxiliary function for transferring state between components
-function updateClickCounter(value) {
-  if (!value) value = 1;
-  this.setState(prevState => {
-    return {
-      clickCounter: prevState.clickCounter + value,
-      clickDate: [
-        prevState.clickDate[1],
-        prevState.clickDate[2],
-        prevState.clickDate[3],
-        prevState.clickDate[4],
-        new Date()
-      ],
-      clickPerSecond:
-        Math.round(
-          100 / ((this.state.clickDate[4] - this.state.clickDate[0]) / 4000)
-        ) / 100
-    };
-  });
-}
-
-function getClickCounter() {
-  return this.state.clickCounter;
-}
-
-class ShopItem extends Component {
-  state = {
-    byued: false
+function ViewerSlider(props) {
+  let innerStyle = {
+    width: props.width * 100 + "%"
   };
 
-  boost = () => {
-    if (getClickCounter() < this.props.cost) return false;
-    updateClickCounter(-this.props.cost);
-    setInterval(
-      updateClickCounter,
-      (1000 / this.props.clicks) * this.props.per
-    );
-    this.setState({ buyed: true });
-  };
+  let legend = props.showLegend ? "/ " + props.legendName + props.top : "";
 
-  render() {
-    return (
-      <button disabled={this.state.buyed} onClick={this.boost}>
-        {this.props.clicks} clicks/{this.props.per} second, cost:{" "}
-        {this.props.cost}
-      </button>
-    );
-  }
+  return (
+    <div className={"viewer__slider viewer__slider--" + props.name}>
+      <p className={"viewer__slider__name"}>{props.fullName}</p>
+      <div
+        style={innerStyle}
+        className={"viewer__slider__inner viewer__slider__inner--" + props.name}
+      >
+        <p>
+          {props.children}
+          <span className={"small"}>{legend}</span>
+        </p>
+      </div>
+    </div>
+  );
 }
 
 class Shop extends React.Component {
@@ -106,15 +127,108 @@ class Shop extends React.Component {
     [3, 1, 320],
     [4, 1, 640],
     [5, 1, 1280]
+    //[30,1, 1] //extra booster
   ];
 
   items = this.itemsData.map(item => (
     <ShopItem clicks={item[0]} per={item[1]} cost={item[2]} />
   ));
+  render() {
+    return (
+      <div className="shop">
+        <h2>Shop</h2>
+        <p>Click to buy</p>
+        {this.items}
+      </div>
+    );
+  }
+}
+
+class ShopItem extends Component {
+  state = {
+    buyed: "",
+    try: ""
+  };
+
+  boost = e => {
+    //if already buyed
+    if (this.state.buyed != "") return false;
+
+    //if not enough points
+    if (getClickCounter() < this.props.cost) {
+      this.setState({ try: " shop__item--try" });
+      return false;
+    }
+
+    updateClickCounter(-this.props.cost);
+    /*setInterval(
+      updateClickCounter,
+      (1000 / this.props.clicks) * this.props.per
+    );*/
+    this.setState({ buyed: " shop__item--buyed" });
+    booster.boost(this.props.clicks / this.props.per);
+  };
 
   render() {
-    return <div>{this.items}</div>;
+    let sS = this.props.per > 1 ? "s" : ""; //second or seconds
+    let sC = this.props.clicks > 1 ? "s" : ""; //click or clicks
+    return (
+      <div
+        class={"shop__item" + this.state.try + this.state.buyed}
+        disabled={this.state.buyed}
+        onClick={this.boost}
+      >
+        {this.props.clicks} click{sC}/{this.props.per} second{sS}
+        <span>cost: {this.props.cost}</span>
+      </div>
+    );
   }
+}
+
+function Booster() {
+  this.cps = 0; //click per second
+
+  this.boost = function(cps) {
+    console.log("booster", cps);
+    this.cps += cps;
+    this.setInt(this.cps);
+  };
+
+  this.setInt = function(cps) {
+    console.log("setInt", cps);
+    if (!cps) return false;
+    if (this.int) clearInterval(this.int);
+    this.int = setInterval(updateClickCounter, 1000 / cps);
+  };
+}
+let booster = new Booster();
+
+//auxiliary function for transferring state between components
+function updateClickCounter(value) {
+  if (!value) value = 1;
+  this.setState(prevState => {
+    return {
+      clickCounter: prevState.clickCounter + value,
+      clickDate: [
+        prevState.clickDate[1],
+        prevState.clickDate[2],
+        prevState.clickDate[3],
+        new Date()
+      ],
+      clickPerSecond:
+        Math.round(
+          100 / ((this.state.clickDate[3] - this.state.clickDate[0]) / 3000)
+        ) / 100
+    };
+  });
+}
+
+function getClickCounter() {
+  return this.state.clickCounter;
+}
+
+function getLevel() {
+  return this.level(this.state.clickCounter);
 }
 
 const rootElement = document.getElementById("root");
